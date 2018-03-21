@@ -1,0 +1,76 @@
+---
+title: "Lemonade Analysis"
+author: "Sophie Beiers"
+date: "3/23/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("~/Dropbox/QMSS/Advanced Analysis/Lab 2/Beyonce's Lemonade- Text Analysis")
+library(tidyverse)
+library(tm)
+library(Matrix)
+library(tidytext)
+```
+
+### Data
+
+```{r}
+txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Dropbox/QMSS/Advanced\ Analysis/Lab\ 2/Beyonce\'s\ Lemonade-\ Text\ Analysis/data/txts"))
+
+txts.df <- read_csv("/Users/sophiebeiers/Dropbox/QMSS/Advanced\ Analysis/Lab\ 2/Beyonce\'s\ Lemonade-\ Text\ Analysis/data/chps.csv")
+
+meta(txts, type="local", tag="title") <- txts.df$song_title
+meta(txts, type="local", tag="chapter")   <- txts.df$chapter
+
+# prepping data
+corpus <- tm_map(txts, content_transformer(tolower))
+corpus <- tm_map(corpus, stripWhitespace)
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+
+# document term matrix
+doctm <- DocumentTermMatrix(corpus) # create DocumentTermMatrix 
+doctm_m <- as.matrix(doctm)
+
+# term document matrix
+doc_tdm <- TermDocumentMatrix(corpus)
+doc_tdm_m <- as.matrix(doc_tdm)
+
+# tidy object
+doc_td <- tidy(doc_tdm)
+head(doc_td)
+
+meta <- as_data_frame(str_split_fixed(doc_td$document, "_", n = 3))
+colnames(meta) <- c("Order", "Song_title", "Chapter")
+doc_td <- as_data_frame(cbind(doc_td, meta))
+doc_td$Chapter <- str_sub(doc_td$Chapter, 1, str_length(doc_td$Chapter)-4)
+```
+
+### Analysis
+```{r}
+test <- doc_td %>%     
+  group_by(term) %>%
+                
+  summarise(n = sum(count)) %>%
+  top_n(n = 15, wt = n)  %>%
+  ungroup() %>%
+  mutate(term = reorder(term, n))
+
+
+ggplot(data = test, aes(term, n)) + 
+  geom_bar(stat = "identity", fill = "#ffcc00") + 
+  geom_text(aes(label = term, x=term, y = 1), hjust = 0,
+            size = 4, color = "#b35900") +
+  geom_text(aes(label= n, x=term, y = n-1), hjust = 1, color= 'white') +
+  xlab(NULL) +coord_flip() + theme_light() + 
+  theme(axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) +
+  labs(x = '', title = "Most Frequent Words in Beyonce's Lemonade", subtitle = "Number of times word appeared in album")
+
+## maybe take out "said" in stop words
+```
+
