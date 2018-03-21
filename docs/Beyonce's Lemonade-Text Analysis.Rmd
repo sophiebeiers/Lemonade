@@ -7,7 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-setwd("~/Dropbox/QMSS/Advanced Analysis/Lab 2/Beyonce's Lemonade- Text Analysis")
+setwd("~/Documents/GitHub/Lemonade/docs")
 library(tidyverse)
 library(tm)
 library(Matrix)
@@ -17,9 +17,9 @@ library(tidytext)
 ### Data
 
 ```{r}
-txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Dropbox/QMSS/Advanced\ Analysis/Lab\ 2/Beyonce\'s\ Lemonade-\ Text\ Analysis/data/txts"))
+txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts"))
 
-txts.df <- read_csv("/Users/sophiebeiers/Dropbox/QMSS/Advanced\ Analysis/Lab\ 2/Beyonce\'s\ Lemonade-\ Text\ Analysis/data/chps.csv")
+txts.df <- read_csv("/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts/chps.csv")
 
 meta(txts, type="local", tag="title") <- txts.df$song_title
 meta(txts, type="local", tag="chapter")   <- txts.df$chapter
