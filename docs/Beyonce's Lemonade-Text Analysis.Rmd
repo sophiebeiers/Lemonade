@@ -12,6 +12,7 @@ library(tidyverse)
 library(tm)
 library(Matrix)
 library(tidytext)
+library(ggridges)
 ```
 
 ### Data
@@ -19,17 +20,25 @@ library(tidytext)
 ```{r}
 txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts"))
 
-txts.df <- read_csv("/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts/chps.csv")
+txts.df <- read_csv("../data/chps.csv")
 
 meta(txts, type="local", tag="title") <- txts.df$song_title
 meta(txts, type="local", tag="chapter")   <- txts.df$chapter
+
+exceptions   <- c("i", "we", "we're", "we've", "we'd", "us", "they", "them", "they've", "they're", "he", "she", "she'll", "she'd", "she's", "you", "you're", "you've", "your","him", "my", "mine", "her", "hers", "his", "him", "sorry")
+
+exceptions2 <- c("sorry", "said")
+
+my_stopwords <- setdiff(stopwords("en"), exceptions)
+reg_stopwords <- setdiff(stopwords("en"), exceptions2)
 
 # prepping data
 corpus <- tm_map(txts, content_transformer(tolower))
 corpus <- tm_map(corpus, stripWhitespace)
 corpus <- tm_map(corpus, removePunctuation)
 corpus <- tm_map(corpus, removeNumbers)
-corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removeWords, my_stopwords)
+
 
 # document term matrix
 doctm <- DocumentTermMatrix(corpus) # create DocumentTermMatrix 
@@ -41,8 +50,8 @@ doc_tdm_m <- as.matrix(doc_tdm)
 
 # tidy object
 doc_td <- tidy(doc_tdm)
-head(doc_td)
 
+# merge information
 meta <- as_data_frame(str_split_fixed(doc_td$document, "_", n = 3))
 colnames(meta) <- c("Order", "Song_title", "Chapter")
 doc_td <- as_data_frame(cbind(doc_td, meta))
@@ -51,16 +60,17 @@ doc_td$Chapter <- str_sub(doc_td$Chapter, 1, str_length(doc_td$Chapter)-4)
 
 ### Analysis
 ```{r}
-test <- doc_td %>%     
+topwords <- doc_td %>% 
+  #anti_join(stop_words, by= c("term" = "word")) %>% 
+  filter(!(term %in% reg_stopwords)) %>% 
   group_by(term) %>%
-                
   summarise(n = sum(count)) %>%
-  top_n(n = 15, wt = n)  %>%
+  top_n(n = 20, wt = n)  %>%
   ungroup() %>%
   mutate(term = reorder(term, n))
 
 
-ggplot(data = test, aes(term, n)) + 
+ggplot(data = topwords, aes(term, n)) + 
   geom_bar(stat = "identity", fill = "#ffcc00") + 
   geom_text(aes(label = term, x=term, y = 1), hjust = 0,
             size = 4, color = "#b35900") +
@@ -69,8 +79,132 @@ ggplot(data = test, aes(term, n)) +
   theme(axis.title = element_blank(), 
         axis.text = element_blank(), 
         axis.ticks = element_blank()) +
-  labs(x = '', title = "Most Frequent Words in Beyonce's Lemonade", subtitle = "Number of times word appeared in album")
-
-## maybe take out "said" in stop words
+  labs(x = '', title = "Most Frequent Words in Beyonce's Lemonade", 
+       subtitle = "Number of times word appeared in album")
 ```
+
+```{r}
+# order chapters and songs 
+doc_td$Song_title[doc_td$Chapter == "Emptiness"] <- "6 Inch"
+doc_td$Song_title[doc_td$Chapter == "Anger"] <- "Don't Hurt Yourself"
+doc_td$Song_title2 <- paste(doc_td$Order, sep = '. ', doc_td$Song_title)
+doc_td$Song_title <- factor(doc_td$Song_title, levels = c("Pray You Catch Me", "Hold Up", "Don't Hurt Yourself", "Sorry", "6 Inch", "Daddy Lessons", "Love Drought", "Sand Castles", "Forward", "Freedom", "All Night"))
+doc_td$Song_title2 <- factor(doc_td$Song_title2, levels = c("1. Pray You Catch Me", "2. Hold Up", "3. Don't Hurt Yourself", "4. Sorry", "5. 6 Inch", "6. Daddy Lessons", "7. Love Drought", "8. Sand Castles", "9. Forward", "10. Freedom", "11. All Night"))
+doc_td$Chapter <- factor(doc_td$Chapter, levels = c("Intuition", "Denial", "Anger", "Apathy", "Emptiness", "Accountability", "Reformation", "Forgiveness", "Ressurection", "Hope", "Redemption"))
+
+topwords_song <- doc_td %>%
+  filter(!(term %in% reg_stopwords)) %>% 
+  arrange_(~ desc(count)) %>%
+  group_by_(~ Song_title2) %>%
+  slice(1:10) %>% 
+  select(Song_title2, term, count)
+
+ggplot(data = topwords_song, aes(reorder(term, count), count)) + 
+  geom_bar(stat = "identity", fill = "#ffcc00") + 
+  coord_flip() + theme_light() + 
+  theme(axis.title = element_blank(), 
+        axis.text.x =  element_blank(), 
+        axis.ticks = element_blank()) +
+  labs(x = '', 
+       title = "Most Frequent Words in Beyonce's Lemonade", 
+       subtitle = "Number of times word appeared in each song") +
+  facet_wrap(~Song_title2, scales = "free_y") +
+  theme(strip.text = element_text(size=8, color = 'black'),  
+        strip.background = element_blank()) 
+
+```
+
+## TF - IDF
+```{r}
+# tf_idf
+doc_tf_idf <-  doc_td %>%
+                bind_tf_idf(term, document, count) %>%  
+                arrange(desc(tf_idf))
+
+doc_tf_idf %>% 
+  filter(!(term %in% c("can","said"))) %>% 
+  arrange_(~ desc(tf_idf)) %>% 
+  group_by(Song_title2) %>% 
+  slice(1:5) %>% 
+ggplot(aes(x = reorder(term, desc(-tf_idf)), y = tf_idf)) +
+  geom_bar(stat = "identity", fill = "#ffcc00") + coord_flip() +
+  facet_wrap(~ Song_title2, scales="free_y") + 
+  theme(axis.title = element_blank(), 
+        axis.text.x =  element_blank(), 
+        axis.ticks = element_blank()) +
+  labs(x = '', y = '', title = "Most Important & Distinct Words Per Song") +
+  theme_light() +
+  theme(strip.text = element_text(size=8, color = 'black'),  
+        strip.background = element_blank()) 
+```
+```{r}
+# need to reorder
+doc_td %>% 
+  group_by(Song_title) %>% 
+  mutate(unq_wrds = length(term)) %>% 
+  select(Song_title, unq_wrds) %>% 
+  unique() %>% 
+ggplot(aes(x = reorder(Song_title, unq_wrds), y = unq_wrds)) +
+         geom_segment(aes(x = Song_title, y = 0, xend = Song_title, yend = unq_wrds),
+                          color = "#ffcc00", size = .5) +
+         geom_point(size = 7, color = "#ffcc00") +
+         geom_text(aes(label = unq_wrds), color = "black", size = 3, check_overlap = TRUE) +
+         labs(x = "", y = "", title = "Number of Unique Words Per Song") +
+         theme_light() +
+         coord_flip() +
+         theme(legend.position="none")
+  
+
+```
+
+```{r}
+# words set up
+pronouns <- c("i", "we", "us", "they", "them", "he", "she", "shes", "you", "him", "her", "hers", "my", "mine")
+fem_wrds <- c("her", "hers", "she","shes", "hers", "woman", "women", "girl", "girls", "mother", "i", "daughter", "daughters", "sister", "sisters", "momma")
+male_wrds <- c("he", "his", "hes", "man", "men", "mans", "boy", "boys", "daddy", "son", "sons", "brother", "brothers", "father")
+together_wrds <- c("we", "us", "together")
+you_wrds <- c("you", "your", "youre")
+i_words <- c("i", "im", "me", "my")
+
+# gender analysis 
+shehe_song <- doc_td %>%
+  filter((term %in% fem_wrds|term %in% male_wrds)) %>% 
+  arrange_(~ desc(count)) %>%
+  group_by_(~ Song_title) %>%
+  select(Song_title, term, count)
+
+shehe_song$male <- ifelse(shehe_song$term %in% male_wrds, -(shehe_song$count), 0)
+shehe_song$female <- ifelse(shehe_song$term %in% fem_wrds, shehe_song$count, 0)
+shehe_song$gender <- shehe_song$female + shehe_song$male
+
+shehe_song <- shehe_song %>% 
+  dplyr::group_by(Song_title) %>% 
+  dplyr::mutate(gender2 = sum(gender))
+shehe_song <- shehe_song %>% 
+  dplyr::group_by(Song_title) %>% 
+  dplyr::mutate(female2 = sum(female), male2 = sum(male))
+shehe_song$gendertot <- ifelse(shehe_song$gender2 > 0, "female", "male")
+shehe_song$gendertot <- factor(shehe_song$gendertot, levels = c("female", "male"))
+
+
+ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
+  geom_segment(data = filter(shehe_song, male2 < 0),
+               aes(x = Song_title, y = 0, 
+                   xend = Song_title, yend = male2, color = "Words about Males"), 
+               inherit.aes = FALSE, 
+               arrow = arrow(length = unit(0.1, "inches"), ends = "last")) +
+  geom_segment(data = filter(shehe_song, female2 > 1),
+               aes(x = Song_title, y = 0, xend = Song_title, 
+                   yend = female2, color = "Words about Females"),
+               inherit.aes = FALSE,
+               arrow = arrow(length = unit(0.1, "inches"), ends = "last")) +
+  scale_color_manual(values=c("#ffcc00","#99ff33"), name = "") +
+  coord_flip() +
+  theme_light() +
+  labs(x = '', y = '', title = 'Female or Male Words in Lemonade Songs') +
+  theme(legend.position="top")
+```
+
+## Chapter 1: 
+
 
