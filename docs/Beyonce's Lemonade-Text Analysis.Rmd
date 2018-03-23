@@ -13,6 +13,7 @@ library(tm)
 library(Matrix)
 library(tidytext)
 library(ggridges)
+library(wordcloud)
 ```
 
 ### Data
@@ -56,6 +57,11 @@ meta <- as_data_frame(str_split_fixed(doc_td$document, "_", n = 3))
 colnames(meta) <- c("Order", "Song_title", "Chapter")
 doc_td <- as_data_frame(cbind(doc_td, meta))
 doc_td$Chapter <- str_sub(doc_td$Chapter, 1, str_length(doc_td$Chapter)-4)
+
+# bag of words
+words <- txts.df %>%
+  unnest_tokens(word, lyrics) %>% 
+  mutate(row = row_number())
 ```
 
 ### Analysis
@@ -152,7 +158,10 @@ ggplot(aes(x = reorder(Song_title, unq_wrds), y = unq_wrds)) +
          labs(x = "", y = "", title = "Number of Unique Words Per Song") +
          theme_light() +
          coord_flip() +
-         theme(legend.position="none")
+         theme(legend.position="none") +
+         theme(
+               axis.text.x =  element_blank(), 
+               axis.ticks = element_blank()) 
   
 
 ```
@@ -160,7 +169,7 @@ ggplot(aes(x = reorder(Song_title, unq_wrds), y = unq_wrds)) +
 ```{r}
 # words set up
 pronouns <- c("i", "we", "us", "they", "them", "he", "she", "shes", "you", "him", "her", "hers", "my", "mine")
-fem_wrds <- c("her", "hers", "she","shes", "hers", "woman", "women", "girl", "girls", "mother", "i", "daughter", "daughters", "sister", "sisters", "momma")
+fem_wrds <- c("her", "hers", "she","shes", "hers", "woman", "women", "girl", "girls", "mother", "i", "daughter", "daughters", "sister", "sisters", "momma", "Becky", "wife", "herself")
 male_wrds <- c("he", "his", "hes", "man", "men", "mans", "boy", "boys", "daddy", "son", "sons", "brother", "brothers", "father")
 together_wrds <- c("we", "us", "together")
 you_wrds <- c("you", "your", "youre")
@@ -201,10 +210,120 @@ ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
   scale_color_manual(values=c("#ffcc00","#99ff33"), name = "") +
   coord_flip() +
   theme_light() +
-  labs(x = '', y = '', title = 'Female or Male Words in Lemonade Songs') +
-  theme(legend.position="top")
+  labs(x = '', y = '', title = 'He/She in Lemonade Songs', 
+       caption = "(number of female or male pronouns used in each song) ") +
+  theme(legend.position="top") +
+  theme(axis.ticks = element_blank())
+```
+```{r}
+austen_books() %>%
+  unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
+  separate(trigram, c("word1", "word2", "word3"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !word3 %in% stop_words$word) %>%
+  count(word1, word2, word3, sort = TRUE)
 ```
 
-## Chapter 1: 
+
+```{r}
+afinn <- get_sentiments("afinn")    
+words <- words %>%
+  inner_join(afinn)
+
+
+x = 0
+for (i in seq(1:502)) {
+  words$tot[i] <- words$score[i] + x
+  x =  words$tot[i]
+}
+
+# reset index 
+words <- words %>% 
+  mutate(row = row_number())
+
+words$chapter_txt <- ifelse(words$chapter == "Intuition", "1. Intuition", words$chapter)
+words$chapter_txt <- ifelse(words$chapter == "Denial", "2. Denial", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Anger", "3. Anger", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Apathy", "4. Apathy", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Emptiness", "5. Emptiness", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Accountability", "6. Accountability", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Reformation", "7. Reformation", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Forgiveness", "8. Forgiveness", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Ressurection", "9. Ressurection", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Hope", "10. Hope", words$chapter_txt)
+words$chapter_txt <- ifelse(words$chapter == "Redemption", "11. Redemption", words$chapter_txt)
+words$chapter_txt <- factor(words$chapter_txt, levels = c("1. Intuition", "2. Denial", "3. Anger", "4. Apathy", "5. Emptiness", "6. Accountability", "7. Reformation", "8. Forgiveness", "9. Ressurection", "10. Hope", "11. Redemption"))
+
+words <- filter(words, !is.na(words$chapter))
+words$chapter <- factor(words$chapter, levels = c("Intuition", "Denial", "Anger", "Apathy", "Emptiness", "Accountability", "Reformation", "Forgiveness", "Ressurection", "Hope", "Redemption"))
+
+
+ggplot(data = words, aes(x = row, y = tot)) +
+  geom_area(aes(fill = chapter_txt), alpha = 0.9, color = "white") +
+  # scale_fill_manual(values=c("#ffff80","#ffff33", "#ffff4d","#ffff66", "#ffff4d", "#ffff66", "#ffff66", "#ffff80", "#ffff66", "#ffff4d"), name = "Chapter") +
+  scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#ffff80", "#ffff66", "#FF7F50", "#FF6347", "#FF4500"), name = "Chapter") +
+  labs(x = '', y = '', title = 'Lemonade: Emotional Range of Chapters Over Time\n', subtitle = '') +
+  ggplot2::annotate(geom = "text", x = 5, y = 100, 
+                    label = "Positive Words", size = 3, hjust = -0.1, vjust = -.1) +
+  ggplot2::annotate("text", x = 5, y = 80, 
+                    label = "Negative Words",  
+                    size = 3, hjust = -0.1, vjust = -.1) +
+    ggplot2::annotate("text", x = 200, y = 150, 
+                    label = "Album Chapters",  
+                    size = 3, hjust = -0.1, vjust = -.1) +
+   #  ggplot2::annotate("text", x = -5, y = 8, 
+   #                  label = "Intuition",  
+   #                  size = 2.5, hjust = -0.1, vjust = -.1) +
+   # ggplot2::annotate("text", x = 50, y = 8, 
+   #                  label = "Denial",  
+   #                  size = 2.5, hjust = -0.1, vjust = -.1) +
+        geom_segment(aes(x = 0, xend = 0 , y = 100, yend = 130),
+                     arrow = arrow(length = unit(0.2,"cm")), color = "#00BFC4") +
+        geom_segment(aes(x = 0, xend = 0 , y = 80, yend = 50),
+                     arrow = arrow(length = unit(0.2,"cm")), color = "#F8766D") +
+        geom_segment(aes(x = 270, xend = 315 , y = 152, yend = 152),
+                     arrow = arrow(length = unit(0.2,"cm")), color = "gray") +
+  theme_void() +
+  theme(axis.text = element_blank(), 
+        axis.ticks = element_blank(),
+        legend.position = "top")
+
+
+```
+
+## Chapter 1: Intuition
+
+
+## Chatper 2: Denial 
+```{r}
+nrc_denial <- get_sentiments("nrc") %>% 
+  filter(sentiment == "sadness"|sentiment == "negative")
+
+denial <- doc_td %>%
+  filter(Chapter == "Denial") %>%
+  inner_join(nrc_denial) %>%
+  count(word, sort = TRUE)
+
+
+wordcloud(words = denial$word, freq = denial$n, max.words = 15, 
+                  random.order = FALSE, rot.per = 0.35, colors = brewer.pal(2, "Dark2"))
+```
+
+## Chapter 3: Anger
+```{r}
+nrc_anger <- get_sentiments("nrc") %>% 
+  filter(sentiment == "anger"| sentiment == "negative")
+
+doc_td$word <- doc_td$term
+
+anger <- doc_td %>%
+  filter(Chapter == "Anger") %>%
+  inner_join(nrc_anger) %>%
+  count(word, sort = TRUE)
+
+wordcloud(words = anger$word, freq = anger$n, max.words = 20, 
+                  random.order = FALSE, rot.per = 0.35, colors = brewer.pal(2, "Dark2"))
+```
 
 
