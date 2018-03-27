@@ -14,10 +14,11 @@ library(Matrix)
 library(tidytext)
 library(ggridges)
 library(wordcloud)
+library(ggrepel)
+library(scales)
 ```
 
-### Data
-
+## Data
 ```{r}
 txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts"))
 
@@ -64,7 +65,8 @@ words <- txts.df %>%
   mutate(row = row_number())
 ```
 
-### Analysis
+## Analysis
+### Common Words
 ```{r}
 topwords <- doc_td %>% 
   #anti_join(stop_words, by= c("term" = "word")) %>% 
@@ -89,6 +91,7 @@ ggplot(data = topwords, aes(term, n)) +
        subtitle = "Number of times word appeared in album")
 ```
 
+#### Common Words by Chapter
 ```{r}
 # order chapters and songs 
 doc_td$Song_title[doc_td$Chapter == "Emptiness"] <- "6 Inch"
@@ -105,6 +108,7 @@ topwords_song <- doc_td %>%
   slice(1:10) %>% 
   select(Song_title2, term, count)
 
+
 ggplot(data = topwords_song, aes(reorder(term, count), count)) + 
   geom_bar(stat = "identity", fill = "#ffcc00") + 
   coord_flip() + theme_light() + 
@@ -120,7 +124,12 @@ ggplot(data = topwords_song, aes(reorder(term, count), count)) +
 
 ```
 
-## TF - IDF
+### Correlation
+```{r, warning = FALSE}
+cor(doc_tdm_m)
+```
+
+### TF - IDF
 ```{r}
 # tf_idf
 doc_tf_idf <-  doc_td %>%
@@ -166,6 +175,7 @@ ggplot(aes(x = reorder(Song_title, unq_wrds), y = unq_wrds)) +
 
 ```
 
+### He/She
 ```{r}
 # words set up
 pronouns <- c("i", "we", "us", "they", "them", "he", "she", "shes", "you", "him", "her", "hers", "my", "mine")
@@ -195,7 +205,7 @@ shehe_song <- shehe_song %>%
 shehe_song$gendertot <- ifelse(shehe_song$gender2 > 0, "female", "male")
 shehe_song$gendertot <- factor(shehe_song$gendertot, levels = c("female", "male"))
 
-
+# visualization 
 ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
   geom_segment(data = filter(shehe_song, male2 < 0),
                aes(x = Song_title, y = 0, 
@@ -215,23 +225,110 @@ ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
   theme(legend.position="top") +
   theme(axis.ticks = element_blank())
 ```
+
+#### Bigrams
 ```{r}
-austen_books() %>%
-  unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
-  separate(trigram, c("word1", "word2", "word3"), sep = " ") %>%
-  filter(!word1 %in% stop_words$word,
-         !word2 %in% stop_words$word,
-         !word3 %in% stop_words$word) %>%
-  count(word1, word2, word3, sort = TRUE)
+# she/he bigrams 
+bigrams <- txts.df %>%
+  unnest_tokens(bigram, lyrics, token = "ngrams", n = 2) %>% 
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+she_bigram <- bigrams %>% 
+  filter(word1 %in% fem_wrds) %>% 
+  count(word2, sort = TRUE)
+
+she_bigram_rev <- bigrams %>% 
+  filter(word2 %in% fem_wrds) %>% 
+  count(word1, sort = TRUE)
+
+he_bigram <- bigrams %>% 
+  filter(word1 %in% male_wrds) %>% 
+  count(word2, sort = TRUE) %>% 
+  slice(1:10)
+
+he_bigram_rev <- bigrams %>% 
+  filter(word2 %in% male_wrds) %>% 
+  count(word1, sort = TRUE)
+
+ggplot(data = he_bigram, aes(x = reorder(word2, desc(-n)), y = n)) +
+  geom_bar(stat = "identity", fill = "#ffcc00") + coord_flip() +
+  theme(axis.title = element_blank(), 
+        axis.text.x =  element_blank(), 
+        axis.ticks = element_blank()) +
+  labs(x = '', y = '', title = "Most Common Words Before 'He'\n") +
+  theme_light() +
+  theme(strip.text = element_text(size=8, color = 'black'),  
+        strip.background = element_blank()) 
 ```
 
-
 ```{r}
+# change words so any fem words become "she" and any male words become "he"
+bigrams$word1 <- ifelse(bigrams$word1 %in% male_wrds, "he", bigrams$word1)
+bigrams$word1 <- ifelse(bigrams$word1 %in% fem_wrds, "she", bigrams$word1)
+
+# code borrowed from: https://www.r-bloggers.com/a-tidytext-analysis-of-the-weinstein-effect/
+he_she_bigram <- bigrams %>%
+  filter(word1 %in% c("he", "she"))
+
+he_she_bigram <- he_she_bigram %>%
+  count(word1, word2) %>%
+  spread(word1, n, fill = 0) %>%
+  mutate(total = he + she,
+         he = (he + 1) / sum(he + 1),
+         she = (she + 1) / sum(she + 1),
+         log.ratio = log2(she / he),
+         abs.ratio = abs(log.ratio)) %>%
+  arrange(desc(log.ratio))
+
+he_she_bigram %>%
+  group_by(direction = ifelse(log.ratio > 0, 'More "she"', "More 'he'")) %>%
+  top_n(10, abs.ratio) %>%
+  ungroup() %>%
+  mutate(word2 = reorder(word2, log.ratio)) %>%
+  ggplot(aes(word2, log.ratio, fill = direction)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "",
+       y = 'Relative appearance after "she" compared to "he"',
+       fill = "",
+       title = "title",
+       subtitle = "") +
+  scale_y_continuous(labels = c("8X", "6X", "4X", "2X", "Same", "2X", "4X", "6X", "8X"),
+                     breaks = seq(-4, 4)) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  expand_limits(y = c(-4, 4)) +
+  theme_light()
+
+```
+```{r}
+he_she_bigram %>%
+  top_n(10, abs.ratio) %>%
+  ggplot(aes(total, log.ratio)) +
+  geom_point() +
+  geom_vline(xintercept = 5, color = "NA") +
+  geom_hline(yintercept = 0, color = "red") +
+  scale_x_log10(breaks = c(10, 100, 1000)) +
+  geom_text_repel(aes(label = word2), segment.alpha = .1, force = 2) +
+  scale_y_continuous(breaks = seq(-4, 4),
+                     labels = c('8X "he"', '6X "he"', '4X "he"', '2X "he"', "Same",
+                                '2X "she"', '4X "she"', '6X "she"', '8X "she"')) +
+  labs(x = 'Total uses after "he" or "she" (Logarithmic scale)',
+       y = 'Relative uses after "she" to after "he"',
+       title = "Gendered Reporting: Pre Weinstein, The Guardian",
+       subtitle = "Words occurring at least 10 times after he/she:
+                  160 unique words (100 displayed) | 11,013 occurrences in total") +
+  expand_limits(y = c(4, -4)) +
+  theme_void()
+```
+
+### Emotional Range 
+```{r}
+# get sentiments lexicon
 afinn <- get_sentiments("afinn")    
 words <- words %>%
   inner_join(afinn)
 
-
+# loop over rows to add up score 
 x = 0
 for (i in seq(1:502)) {
   words$tot[i] <- words$score[i] + x
@@ -241,6 +338,8 @@ for (i in seq(1:502)) {
 # reset index 
 words <- words %>% 
   mutate(row = row_number())
+
+# create order to chapters
 
 words$chapter_txt <- ifelse(words$chapter == "Intuition", "1. Intuition", words$chapter)
 words$chapter_txt <- ifelse(words$chapter == "Denial", "2. Denial", words$chapter_txt)
@@ -259,10 +358,11 @@ words <- filter(words, !is.na(words$chapter))
 words$chapter <- factor(words$chapter, levels = c("Intuition", "Denial", "Anger", "Apathy", "Emptiness", "Accountability", "Reformation", "Forgiveness", "Ressurection", "Hope", "Redemption"))
 
 
+# over time visualization
 ggplot(data = words, aes(x = row, y = tot)) +
   geom_area(aes(fill = chapter_txt), alpha = 0.9, color = "white") +
-  # scale_fill_manual(values=c("#ffff80","#ffff33", "#ffff4d","#ffff66", "#ffff4d", "#ffff66", "#ffff66", "#ffff80", "#ffff66", "#ffff4d"), name = "Chapter") +
-  scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#ffff80", "#ffff66", "#FF7F50", "#FF6347", "#FF4500"), name = "Chapter") +
+  # scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#ffff66", "#ffff80", "#FF8C00", "#FF6347"), name = "Chapter") +
+    scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#FF6347", "#FF8C00", "#ffca50", "#ffdb66", "#ff8172"), name = "Chapter") +
   labs(x = '', y = '', title = 'Lemonade: Emotional Range of Chapters Over Time\n', subtitle = '') +
   ggplot2::annotate(geom = "text", x = 5, y = 100, 
                     label = "Positive Words", size = 3, hjust = -0.1, vjust = -.1) +
@@ -279,7 +379,7 @@ ggplot(data = words, aes(x = row, y = tot)) +
    #                  label = "Denial",  
    #                  size = 2.5, hjust = -0.1, vjust = -.1) +
         geom_segment(aes(x = 0, xend = 0 , y = 100, yend = 130),
-                     arrow = arrow(length = unit(0.2,"cm")), color = "#00BFC4") +
+                     arrow = arrow(length = unit(0.2,"cm")), color = "#99ff33") +
         geom_segment(aes(x = 0, xend = 0 , y = 80, yend = 50),
                      arrow = arrow(length = unit(0.2,"cm")), color = "#F8766D") +
         geom_segment(aes(x = 270, xend = 315 , y = 152, yend = 152),
@@ -292,10 +392,7 @@ ggplot(data = words, aes(x = row, y = tot)) +
 
 ```
 
-## Chapter 1: Intuition
-
-
-## Chatper 2: Denial 
+## Chapter 2: Denial 
 ```{r}
 nrc_denial <- get_sentiments("nrc") %>% 
   filter(sentiment == "sadness"|sentiment == "negative")
