@@ -1,12 +1,24 @@
 ---
 title: "Lemonade Analysis"
 author: "Sophie Beiers"
-date: "3/23/2018"
-output: html_document
+date: "3/30/2018"
+output: 
+  html_document:
+    keep_md: true
+    toc: true
+    theme: lumen
+    highlight: tango
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.path="../images/",
+               cache.path="cache/",
+               cache=FALSE,
+               echo=TRUE,
+               message=FALSE,
+               warning=FALSE,
+               eval = TRUE) 
 setwd("~/Documents/GitHub/Lemonade/docs")
 library(tidyverse)
 library(tm)
@@ -16,9 +28,11 @@ library(ggridges)
 library(wordcloud)
 library(ggrepel)
 library(scales)
+library(xtable)
 ```
 
 ## Data
+2016 may be long past, but Beyoncé's vulnerable, powerful and feminist album "Lemonade" will inarguably always be relevant. The album is accompanied by an hour-long film broken into twelve songs and eleven "chapters" all weaving together a narrative of heart break, betrayal, loss, black female empowerment and ultimately hope. The following analysis deep dives into each song's lyrics per chapter. Lyrics were found on [Genius.com](https://genius.com/albums/Beyonce/Lemonade) and transferred to text files for analysis. For the purposes of this analysis, the twelfth song, "Formation" was left out due to it's lack of assignment to a "chapter."
 ```{r}
 txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts"))
 
@@ -67,6 +81,7 @@ words <- txts.df %>%
 
 ## Analysis
 ### Common Words
+To begin, I simply split each song into a "bag of words" and counted the most common words that came up throughout the entirity of the album. Unsurprisingly, "love" comes up 81 times; many of the lyrics in Beyoncé's journey reference her relationship with Jay-Z, positively or negatively. Other common words include "sorry," likely from the song "Sorry" in which she explains repeatedly how NOT sorry she is about Jay Z's affair, and "feel," which is certainly fitting given the range of emotions Beyoncé expresses throughout the album.
 ```{r}
 topwords <- doc_td %>% 
   #anti_join(stop_words, by= c("term" = "word")) %>% 
@@ -91,7 +106,8 @@ ggplot(data = topwords, aes(term, n)) +
        subtitle = "Number of times word appeared in album")
 ```
 
-#### Common Words by Chapter
+#### Common Words by Song
+Next, I split the words up by song to find which lyrics are most popular in each song. Unsurprisingly, the title of the song is featured in most top 10 lists (i.e. "sorry" in Sorry, "pray" in Pray You Catch Me, "daddy" in Daddy Lessons). From the visualizations, we can also see which songs are more repetetive than others. For instance, the songs "Sorry", "Hold Up" and "All Night" use the top 10 lyrics repeatedly whereas songs like "Forward" and "Love Drought" feature fewer words. 
 ```{r}
 # order chapters and songs 
 doc_td$Song_title[doc_td$Chapter == "Emptiness"] <- "6 Inch"
@@ -125,12 +141,18 @@ ggplot(data = topwords_song, aes(reorder(term, count), count)) +
 ```
 
 ### Correlation
-```{r, warning = FALSE}
-cor(doc_tdm_m)
+I ran a correlation analysis on the lyrics of each song to better understand which songs were more like or unlike each other. 
+```{r, warning = FALSE, results = 'asis'}
+print(xtable(cor(doc_tdm_m), type = "html"))
 ```
 
 ### TF - IDF
-```{r}
+"TF-IDF" (term frequency-inverse document frequency) reflects the most important words for each song or album by decreasing the weight of words not seen frequently overall and increasing the weight of words not seen very much in the entire album as a whole. Thus, the following words per song are the most unique or important to that song in relation to the word's appearance in the album as a whole. 
+
+We see some interesting themes come up: it's now clear that "6 Inch" now clearly speaks a lot about women ("she", "her") and likely about *empowering* women ("she", "works", "money"). "6 inch" refers to a metaphor for 6-inch heels and seeks to amplify the fierceness and independent power of women! The title "Sand Castles" may not leave us with much, but it's most important words "promise," "work, "couldnt" give us some insight into its topic. In "Sand Castles," Beyoncé reminisces about her flawed but beautiful relationship with Jay Z. Promises were kept, promises were broken. The emotion! 
+
+
+```{r, warning = FALSE}
 # tf_idf
 doc_tf_idf <-  doc_td %>%
                 bind_tf_idf(term, document, count) %>%  
@@ -152,6 +174,12 @@ ggplot(aes(x = reorder(term, desc(-tf_idf)), y = tf_idf)) +
   theme(strip.text = element_text(size=8, color = 'black'),  
         strip.background = element_blank()) 
 ```
+
+### Unique Words
+
+I next looked into how many words were unique in each song. "Freedom" uses the largest amount of unique words, while songs like "Forward" and "Sand Castle" are shorter and more repetative. To make this analysis better, next time I would look at the frequency of unique words out of the song as a whole so the analysis is proportionate to the length of song. 
+
+
 ```{r}
 # need to reorder
 doc_td %>% 
@@ -176,6 +204,10 @@ ggplot(aes(x = reorder(Song_title, unq_wrds), y = unq_wrds)) +
 ```
 
 ### He/She
+I was interested in looking into which songs talked more about men vs. women. To do so, I created a list of words referring to females (i.e. "her", "she", "girl") and a list of words referring to males (i.e. "he", "daddy") and I plot the number of times each of these words appeared in each song. 
+
+We can see that 6 Inch talks primarily about women; as we recall, 6 Inch is that epic song about female badass-ery, so no surprises here. Daddy Lessons, also unsurprisingly, is mainly about men. Out of all eleven songs, these six were the only ones even referring to females or males, so overall, Beyoncé's lyrics don't tend to be overbearingly gendered. 
+
 ```{r}
 # words set up
 pronouns <- c("i", "we", "us", "they", "them", "he", "she", "shes", "you", "him", "her", "hers", "my", "mine")
@@ -217,7 +249,7 @@ ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
                    yend = female2, color = "Words about Females"),
                inherit.aes = FALSE,
                arrow = arrow(length = unit(0.1, "inches"), ends = "last")) +
-  scale_color_manual(values=c("#ffcc00","#99ff33"), name = "") +
+  scale_color_manual(values=c("#ffcc00","#b3de69"), name = "") +
   coord_flip() +
   theme_light() +
   labs(x = '', y = '', title = 'He/She in Lemonade Songs', 
@@ -227,6 +259,10 @@ ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
 ```
 
 #### Bigrams
+I then used bigrams (two word segments of the lyrics) to understand which words usually came after feminine and male pronouns. Because the words "he" and "she" were rarely used in the album, I extended this analysis to look at words that came after any feminine or male pronoun, as defined above. 
+
+The men in Beyoncé's journey "said" and "told" things and... Beyoncé probably said "boy, bye" to them/him a few times. The women in Lemonade "worked" and "grinded" hard and "ain't" sorry. They "loved" and "prayed" and generally felt and did more. 
+
 ```{r}
 # she/he bigrams 
 bigrams <- txts.df %>%
@@ -235,31 +271,37 @@ bigrams <- txts.df %>%
 
 she_bigram <- bigrams %>% 
   filter(word1 %in% fem_wrds) %>% 
-  count(word2, sort = TRUE)
+  count(word2, sort = TRUE) %>% 
+  slice(1:10)
+she_bigram$type <- "Words After 'She'"
+colnames(she_bigram)[1] <- "word"
 
-she_bigram_rev <- bigrams %>% 
-  filter(word2 %in% fem_wrds) %>% 
-  count(word1, sort = TRUE)
 
 he_bigram <- bigrams %>% 
   filter(word1 %in% male_wrds) %>% 
   count(word2, sort = TRUE) %>% 
   slice(1:10)
+he_bigram$type <- "Words After 'He'"
+colnames(he_bigram)[1] <- "word"
 
-he_bigram_rev <- bigrams %>% 
-  filter(word2 %in% male_wrds) %>% 
-  count(word1, sort = TRUE)
+bigrams_top10 <- rbind(she_bigram, he_bigram)
 
-ggplot(data = he_bigram, aes(x = reorder(word2, desc(-n)), y = n)) +
-  geom_bar(stat = "identity", fill = "#ffcc00") + coord_flip() +
+ggplot(data = bigrams_top10, aes(x = reorder(word, desc(-n)), y = n)) +
+  geom_bar(aes(fill = type), stat = "identity") + coord_flip() +
   theme(axis.title = element_blank(), 
         axis.text.x =  element_blank(), 
         axis.ticks = element_blank()) +
-  labs(x = '', y = '', title = "Most Common Words Before 'He'\n") +
-  theme_light() +
-  theme(strip.text = element_text(size=8, color = 'black'),  
-        strip.background = element_blank()) 
+  scale_fill_manual(values=c("#b3de69","#ffff80")) +
+  labs(x = '', y = '', title = "") +
+  facet_wrap(~type, scales = "free") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none")
+  
 ```
+
+The below idea was taken from an R-bloggers article on the "[Weinsten Effect](https://www.r-bloggers.com/a-tidytext-analysis-of-the-weinstein-effect/)," but I adapted it for Lemonade analysis. To understand the magnitude of when these words are used after male or female pronouns, I transform the bigrams into a log ratio of she/he. Thus, the sign of the log ratio indicates whether the second word appears more after she (positive) or he (negative) and the absolute value of the log ratio indicates the magnitude. Below, we can see which words appear after male pronouns and female pronouns relative to the other gendered word. 
+
+Several trends emerge: first, we see that "he" (likely mainly Jay-Z) *says*, *tells*, and *swears* (likely as in "promises") a lot. Does he stick to his word? There's also a fair amount of violence associated to the male pronoun. When Beyoncé talks about girls/women, they emote and DO more (with words like "love", "pray", "worked", "grinds"). 
 
 ```{r}
 # change words so any fem words become "she" and any male words become "he"
@@ -281,7 +323,7 @@ he_she_bigram <- he_she_bigram %>%
   arrange(desc(log.ratio))
 
 he_she_bigram %>%
-  group_by(direction = ifelse(log.ratio > 0, 'More "she"', "More 'he'")) %>%
+  group_by(direction = ifelse(log.ratio > 0, 'More female', "More male")) %>%
   top_n(10, abs.ratio) %>%
   ungroup() %>%
   mutate(word2 = reorder(word2, log.ratio)) %>%
@@ -289,39 +331,25 @@ he_she_bigram %>%
   geom_col() +
   coord_flip() +
   labs(x = "",
-       y = 'Relative appearance after "she" compared to "he"',
+       y = 'Relative appearance after feminine pronouns compared to male pronouns',
        fill = "",
-       title = "title",
-       subtitle = "") +
+       title = "Lemonade",
+       subtitle = "The Most Gendered Words After Female/Male Pronouns") +
+  scale_fill_manual(values=c("#b3de69","#ffff80")) +
   scale_y_continuous(labels = c("8X", "6X", "4X", "2X", "Same", "2X", "4X", "6X", "8X"),
                      breaks = seq(-4, 4)) +
   guides(fill = guide_legend(reverse = TRUE)) +
   expand_limits(y = c(-4, 4)) +
-  theme_light()
+  theme_minimal()
 
-```
-```{r}
-he_she_bigram %>%
-  top_n(10, abs.ratio) %>%
-  ggplot(aes(total, log.ratio)) +
-  geom_point() +
-  geom_vline(xintercept = 5, color = "NA") +
-  geom_hline(yintercept = 0, color = "red") +
-  scale_x_log10(breaks = c(10, 100, 1000)) +
-  geom_text_repel(aes(label = word2), segment.alpha = .1, force = 2) +
-  scale_y_continuous(breaks = seq(-4, 4),
-                     labels = c('8X "he"', '6X "he"', '4X "he"', '2X "he"', "Same",
-                                '2X "she"', '4X "she"', '6X "she"', '8X "she"')) +
-  labs(x = 'Total uses after "he" or "she" (Logarithmic scale)',
-       y = 'Relative uses after "she" to after "he"',
-       title = "Gendered Reporting: Pre Weinstein, The Guardian",
-       subtitle = "Words occurring at least 10 times after he/she:
-                  160 unique words (100 displayed) | 11,013 occurrences in total") +
-  expand_limits(y = c(4, -4)) +
-  theme_void()
 ```
 
 ### Emotional Range 
+
+Lemonade is EMOTIONAL and raw, no doubt, but do the titles of each Chapter correctly label the emotion at hand? To better understand the true emotional range of Lemonade, I joined the "AFINN" lexicon to the album lyrics, which rates the magnitude of positivity and negativity to each word on a scale of -5 (most negative) to 5 (most positive). I then created a cumulative counter that added each negative or positive score to the previous word's score. In the end, we can see the emotional (positive vs. negative) flow of the album in its entirety. 
+
+Intuition and Denial start us off strong, then the album takes a negative turn when we get to Anger and Apathy. Things remain fairly negative throughout Emptiness, Accountability and Forgiveness, then Resurrection, Hope and ultimately Redemption bring us way back up and let us end on a high note. I would guess that the spurts of positive words within Emptiness and Accountability are likely words like "like" or "love" but are actually being talked about in a more sad, negative way. 
+
 ```{r}
 # get sentiments lexicon
 afinn <- get_sentiments("afinn")    
@@ -361,7 +389,6 @@ words$chapter <- factor(words$chapter, levels = c("Intuition", "Denial", "Anger"
 # over time visualization
 ggplot(data = words, aes(x = row, y = tot)) +
   geom_area(aes(fill = chapter_txt), alpha = 0.9, color = "white") +
-  # scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#ffff66", "#ffff80", "#FF8C00", "#FF6347"), name = "Chapter") +
     scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#FF6347", "#FF8C00", "#ffca50", "#ffdb66", "#ff8172"), name = "Chapter") +
   labs(x = '', y = '', title = 'Lemonade: Emotional Range of Chapters Over Time\n', subtitle = '') +
   ggplot2::annotate(geom = "text", x = 5, y = 100, 
@@ -372,17 +399,11 @@ ggplot(data = words, aes(x = row, y = tot)) +
     ggplot2::annotate("text", x = 200, y = 150, 
                     label = "Album Chapters",  
                     size = 3, hjust = -0.1, vjust = -.1) +
-   #  ggplot2::annotate("text", x = -5, y = 8, 
-   #                  label = "Intuition",  
-   #                  size = 2.5, hjust = -0.1, vjust = -.1) +
-   # ggplot2::annotate("text", x = 50, y = 8, 
-   #                  label = "Denial",  
-   #                  size = 2.5, hjust = -0.1, vjust = -.1) +
         geom_segment(aes(x = 0, xend = 0 , y = 100, yend = 130),
                      arrow = arrow(length = unit(0.2,"cm")), color = "#99ff33") +
         geom_segment(aes(x = 0, xend = 0 , y = 80, yend = 50),
                      arrow = arrow(length = unit(0.2,"cm")), color = "#F8766D") +
-        geom_segment(aes(x = 270, xend = 315 , y = 152, yend = 152),
+        geom_segment(aes(x = 275, xend = 315 , y = 152, yend = 152),
                      arrow = arrow(length = unit(0.2,"cm")), color = "gray") +
   theme_void() +
   theme(axis.text = element_blank(), 
@@ -392,22 +413,36 @@ ggplot(data = words, aes(x = row, y = tot)) +
 
 ```
 
-## Chapter 2: Denial 
+Lastly, I made the visualization interactive so that the user can scroll over the plot and see the Chapter title, song title and word at hand that contributes to the positive or negative accumulation over time. 
+
 ```{r}
-nrc_denial <- get_sentiments("nrc") %>% 
-  filter(sentiment == "sadness"|sentiment == "negative")
+## An attempt at interactivity 
+library(plotly)
+colnames(words)[colnames(words) == "chapter_txt"] <- "Chapter"
+emo <- ggplot(data = words, aes(x = row, y = tot)) +
+  geom_area(aes(fill = Chapter, label = word, text = song_title), alpha = 0.9, color = "white") +
+    scale_fill_manual(values=c("#ffff80","#ffff33", "#FFA500","#FF8C00", "#FF6126", "#FF4500", "#FF6347", "#FF8C00", "#ffca50", "#ffdb66", "#ff8172"), name = "Chapter") +
+  labs(x = '', y = '', title = 'Lemonade: Emotional Range of Chapters Over Time\n', subtitle = '') +
+  theme_void() +
+  theme(text=element_text(size=16, 
+        family="Serif")) +
+  theme(axis.text = element_blank(), 
+        axis.ticks = element_blank(),
+        legend.position = "none") 
 
-denial <- doc_td %>%
-  filter(Chapter == "Denial") %>%
-  inner_join(nrc_denial) %>%
-  count(word, sort = TRUE)
+# emo <- emo %>%  
+# add_fun(function(emo) {
+#     emo %>% 
+#       add_segments(x = 0, xend = 0, y = 100, yend = 175) %>% 
+#       add_annotations("Minimum uncertainty")
+#   })
 
+ggplotly(p = emo, tooltip = c("Chapter", "song_title", "word"))
 
-wordcloud(words = denial$word, freq = denial$n, max.words = 15, 
-                  random.order = FALSE, rot.per = 0.35, colors = brewer.pal(2, "Dark2"))
 ```
 
-## Chapter 3: Anger
+### Chapter 3: Anger
+Lastly, because a sentiment package for "anger" exists in the NRC lexicon, I tested its use against the chapter, "Anger" and built a word cloud. Below indicates the words from the chapter "Anger" that are most associated with anger. 
 ```{r}
 nrc_anger <- get_sentiments("nrc") %>% 
   filter(sentiment == "anger"| sentiment == "negative")
