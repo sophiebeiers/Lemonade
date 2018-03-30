@@ -29,10 +29,13 @@ library(wordcloud)
 library(ggrepel)
 library(scales)
 library(xtable)
+library(knitr)
+library(stargazer)
+library(corrplot)
 ```
 
 ## Data
-2016 may be long past, but Beyoncé's vulnerable, powerful and feminist album "Lemonade" will inarguably always be relevant. The album is accompanied by an hour-long film broken into twelve songs and eleven "chapters" all weaving together a narrative of heart break, betrayal, loss, black female empowerment and ultimately hope. The following analysis deep dives into each song's lyrics per chapter. Lyrics were found on [Genius.com](https://genius.com/albums/Beyonce/Lemonade) and transferred to text files for analysis. For the purposes of this analysis, the twelfth song, "Formation" was left out due to it's lack of assignment to a "chapter."
+2016 may be long past, but Beyoncé's vulnerable, emotional, and powerfully feminist album "Lemonade" will inarguably always be relevant. The album is accompanied by an hour-long film broken into twelve songs and eleven "chapters" all weaving together a narrative of heart break, betrayal, loss, black female empowerment and ultimately hope. The following text analysis dives deep into each song's lyrics per chapter. Lyrics were found on [Genius.com](https://genius.com/albums/Beyonce/Lemonade) and transferred to text files for analysis. For the purposes of this analysis, the twelfth song, "Formation" was left out due to it's lack of assignment to a "chapter."
 ```{r}
 txts <- VCorpus(DirSource(directory = "/Users/sophiebeiers/Documents/GitHub/Lemonade/data/txts"))
 
@@ -81,7 +84,7 @@ words <- txts.df %>%
 
 ## Analysis
 ### Common Words
-To begin, I simply split each song into a "bag of words" and counted the most common words that came up throughout the entirity of the album. Unsurprisingly, "love" comes up 81 times; many of the lyrics in Beyoncé's journey reference her relationship with Jay-Z, positively or negatively. Other common words include "sorry," likely from the song "Sorry" in which she explains repeatedly how NOT sorry she is about Jay Z's affair, and "feel," which is certainly fitting given the range of emotions Beyoncé expresses throughout the album.
+To begin, I simply split each song into a "bag of words" and counted the most common words that came up throughout the entirety of the album. Unsurprisingly, "love" comes up 81 times; many of the lyrics in Beyoncé's journey reference her relationship with Jay-Z, positively or negatively. Other common words include "sorry," likely mainly from the song "Sorry" in which she explains repeatedly how NOT sorry she is about Jay Z's affair, and "feel," which is certainly fitting given the range of emotions Beyoncé expresses throughout the album.
 ```{r}
 topwords <- doc_td %>% 
   #anti_join(stop_words, by= c("term" = "word")) %>% 
@@ -107,7 +110,7 @@ ggplot(data = topwords, aes(term, n)) +
 ```
 
 #### Common Words by Song
-Next, I split the words up by song to find which lyrics are most popular in each song. Unsurprisingly, the title of the song is featured in most top 10 lists (i.e. "sorry" in Sorry, "pray" in Pray You Catch Me, "daddy" in Daddy Lessons). From the visualizations, we can also see which songs are more repetetive than others. For instance, the songs "Sorry", "Hold Up" and "All Night" use the top 10 lyrics repeatedly whereas songs like "Forward" and "Love Drought" feature fewer words. 
+Next, I split the words up by song to find which lyrics are most popular in each song. Unsurprisingly, the title of the song is featured in most top 10 lists (i.e. "sorry" in Sorry, "pray" in Pray You Catch Me, "daddy" in Daddy Lessons). From the visualizations, we can also see which songs are more repetitive than others. For instance, the songs "Sorry", "Hold Up" and "All Night" use the top 10 lyrics repeatedly whereas songs like "Forward" and "Love Drought" feature fewer words. 
 ```{r}
 # order chapters and songs 
 doc_td$Song_title[doc_td$Chapter == "Emptiness"] <- "6 Inch"
@@ -141,15 +144,24 @@ ggplot(data = topwords_song, aes(reorder(term, count), count)) +
 ```
 
 ### Correlation
-I ran a correlation analysis on the lyrics of each song to better understand which songs were more like or unlike each other. 
-```{r, warning = FALSE, results = 'asis'}
-print(xtable(cor(doc_tdm_m), type = "html"))
+I ran correlation analysis on the lyrics of each song to better understand which songs were more like or unlike each other. From the table, we can see that "Hold Up" and "Love Drought" are the most similar with a correlation coefficient of 0.696. Similarly, "Love Drought" and "Pray You Catch Me" hold the second highest correlation coefficient of 0.588. All three of these songs make a lot of references to "love" and relationships. When listening to the songs, Pray You Catch me and Love Drought are more similar in emotion while Hold Up is quite a bit more upbeat than the other two, but the lyrics may not reflect this. Other song lyrics are only weakly correlated (coefficient < 0.3). Funnily, most correlations are positive, but the few negative correlations are very weak (i.e. between "Forward" and "6 Inch" or "Sorry" and "6 Inch"). All negative relationships include 6 Inch; this song is arguably one of the most intense of the album, so is clearly quite different from the others.  
+
+![](../images/Correlation.png)
+```{r, warning=FALSE, results='asis', eval = FALSE }
+colnames(doc_tdm_m) <- c("Pray You Catch Me", "Freedom", "All Night", "Hold Up", "Don't Hurt Yourself", "Sorry", "6 Inch", "Daddy Lessons", "Love Drought", "Sand Castles", "Forward")
+stargazer(cor(doc_tdm_m), type = "text")
+```
+```{r}
+
+colnames(doc_tdm_m) <- c("Pray You Catch Me", "Freedom", "All Night", "Hold Up", "Don't Hurt Yourself", "Sorry", "6 Inch", "Daddy Lessons", "Love Drought", "Sand Castles", "Forward")
+cor <- cor(doc_tdm_m)
+corrplot(cor, type = "upper", tl.col = "black", tl.srt = 45)
 ```
 
 ### TF - IDF
 "TF-IDF" (term frequency-inverse document frequency) reflects the most important words for each song or album by decreasing the weight of words not seen frequently overall and increasing the weight of words not seen very much in the entire album as a whole. Thus, the following words per song are the most unique or important to that song in relation to the word's appearance in the album as a whole. 
 
-We see some interesting themes come up: it's now clear that "6 Inch" now clearly speaks a lot about women ("she", "her") and likely about *empowering* women ("she", "works", "money"). "6 inch" refers to a metaphor for 6-inch heels and seeks to amplify the fierceness and independent power of women! The title "Sand Castles" may not leave us with much, but it's most important words "promise," "work, "couldnt" give us some insight into its topic. In "Sand Castles," Beyoncé reminisces about her flawed but beautiful relationship with Jay Z. Promises were kept, promises were broken. The emotion! 
+We see some interesting themes come up: it's now clear that "6 Inch" now clearly speaks a lot about women ("she", "her") and likely about *empowering* women ("she", "works", "money"). "6 inch" refers to a metaphor for 6-inch heels and seeks to amplify the fierceness and independent power of women! The title "Sand Castles" may not leave us with much, but its most important words "promise," "work, and "couldn't" give us some insight into its topic. In "Sand Castles," Beyoncé reminisces about her flawed but beautiful relationship with Jay Z. Promises were kept, promises were broken. The EMOTION! 
 
 
 ```{r, warning = FALSE}
@@ -177,7 +189,7 @@ ggplot(aes(x = reorder(term, desc(-tf_idf)), y = tf_idf)) +
 
 ### Unique Words
 
-I next looked into how many words were unique in each song. "Freedom" uses the largest amount of unique words, while songs like "Forward" and "Sand Castle" are shorter and more repetative. To make this analysis better, next time I would look at the frequency of unique words out of the song as a whole so the analysis is proportionate to the length of song. 
+I next looked into how many words were unique in each song. "Freedom" uses the largest amount of unique words, while songs like "Forward" and "Sand Castle" are shorter and more repetitive. To make this analysis better next time, I would look at the frequency of unique words out of the song as a whole so the analysis is proportionate to the length of song. 
 
 
 ```{r}
@@ -204,7 +216,7 @@ ggplot(aes(x = reorder(Song_title, unq_wrds), y = unq_wrds)) +
 ```
 
 ### He/She
-I was interested in looking into which songs talked more about men vs. women. To do so, I created a list of words referring to females (i.e. "her", "she", "girl") and a list of words referring to males (i.e. "he", "daddy") and I plot the number of times each of these words appeared in each song. 
+I was interested in looking into which songs talked more about men vs. women. To do so, I created a list of words referring to females (i.e. "her", "she", "girl") and a list of words referring to males (i.e. "he", "daddy") and plotted the number of times each of these words appeared in each song. 
 
 We can see that 6 Inch talks primarily about women; as we recall, 6 Inch is that epic song about female badass-ery, so no surprises here. Daddy Lessons, also unsurprisingly, is mainly about men. Out of all eleven songs, these six were the only ones even referring to females or males, so overall, Beyoncé's lyrics don't tend to be overbearingly gendered. 
 
@@ -261,7 +273,7 @@ ggplot(shehe_song, aes(x = Song_title, y = gender2)) +
 #### Bigrams
 I then used bigrams (two word segments of the lyrics) to understand which words usually came after feminine and male pronouns. Because the words "he" and "she" were rarely used in the album, I extended this analysis to look at words that came after any feminine or male pronoun, as defined above. 
 
-The men in Beyoncé's journey "said" and "told" things and... Beyoncé probably said "boy, bye" to them/him a few times. The women in Lemonade "worked" and "grinded" hard and "ain't" sorry. They "loved" and "prayed" and generally felt and did more. 
+The men in Beyoncé's journey "said" and "told" things and... Beyoncé probably said "boy, bye" to them/him a few times. The women in Lemonade "worked" and "grind-ed" and "ain't" sorry. They "loved" and "prayed" and generally felt and did more than the men. 
 
 ```{r}
 # she/he bigrams 
@@ -299,7 +311,7 @@ ggplot(data = bigrams_top10, aes(x = reorder(word, desc(-n)), y = n)) +
   
 ```
 
-The below idea was taken from an R-bloggers article on the "[Weinsten Effect](https://www.r-bloggers.com/a-tidytext-analysis-of-the-weinstein-effect/)," but I adapted it for Lemonade analysis. To understand the magnitude of when these words are used after male or female pronouns, I transform the bigrams into a log ratio of she/he. Thus, the sign of the log ratio indicates whether the second word appears more after she (positive) or he (negative) and the absolute value of the log ratio indicates the magnitude. Below, we can see which words appear after male pronouns and female pronouns relative to the other gendered word. 
+The below idea was taken from an R-bloggers article on the "[Weinsten Effect](https://www.r-bloggers.com/a-tidytext-analysis-of-the-weinstein-effect/)," but I adapted it for Lemonade analysis. To understand the magnitude of when these words are used after male or female pronouns, I transform the bi grams into a log ratio of she/he. Thus, the sign of the log ratio indicates whether the second word appears more after she (positive) or he (negative) and the absolute value of the log ratio indicates the magnitude. Below, we can see which words appear after male pronouns and female pronouns relative to the other gendered word. 
 
 Several trends emerge: first, we see that "he" (likely mainly Jay-Z) *says*, *tells*, and *swears* (likely as in "promises") a lot. Does he stick to his word? There's also a fair amount of violence associated to the male pronoun. When Beyoncé talks about girls/women, they emote and DO more (with words like "love", "pray", "worked", "grinds"). 
 
@@ -335,7 +347,7 @@ he_she_bigram %>%
        fill = "",
        title = "Lemonade",
        subtitle = "The Most Gendered Words After Female/Male Pronouns") +
-  scale_fill_manual(values=c("#b3de69","#ffff80")) +
+  scale_fill_manual(values=c("#ffff80", "#b3de69")) +
   scale_y_continuous(labels = c("8X", "6X", "4X", "2X", "Same", "2X", "4X", "6X", "8X"),
                      breaks = seq(-4, 4)) +
   guides(fill = guide_legend(reverse = TRUE)) +
@@ -413,7 +425,7 @@ ggplot(data = words, aes(x = row, y = tot)) +
 
 ```
 
-Lastly, I made the visualization interactive so that the user can scroll over the plot and see the Chapter title, song title and word at hand that contributes to the positive or negative accumulation over time. 
+Lastly, I made the visualization **interactive** so that the user can scroll over the plot and see the chapter title, song title and word at hand that contributes to the positive or negative accumulation over time. 
 
 ```{r}
 ## An attempt at interactivity 
